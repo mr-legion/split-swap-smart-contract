@@ -5,28 +5,23 @@ pragma solidity >=0.8.2 <0.9.0;
 import '@uniswap/v2-core/contracts/interfaces/IERC20.sol';
 import '@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol';
 
-contract SplitSwap {
+/**
+ * @title Split swap
+ * @notice Script to perform split swap in Uniswap V2
+ */
+contract SplitSwapV2 {
 
-    address owner;
-
-    constructor() {
-       owner = msg.sender;
-    }
-
-    function approve(address token, address router, uint256 amount) public {
-        require(msg.sender == owner, 'Uniswap: NOT_OWNER');
-        IERC20(token).approve(router, amount);
-    }
-
-    function withdraw(address token) public {
-        require(msg.sender == owner, 'Uniswap: NOT_OWNER');
-        uint balance = IERC20(token).balanceOf(address(this));
-        IERC20(token).transfer(msg.sender, balance);
-    }
-
+    // swap token0 to token1 by router,
+    // the amount of each swap is equal to the size,
+    // the amount of the last swap may be less than the size
     function splitSwap(address token0, address token1, address router, uint256 amount, uint256 size) public {
 
-        require(msg.sender == owner, 'Uniswap: NOT_OWNER');
+        require(amount > 0, 'SplitSwap: AMOUNT_IS_ZERO');
+        require(size > 0, 'SplitSwap: SIZE_IS_ZERO');
+        require(size <= amount, 'SplitSwap: SIZE_IS_MORE_THAN_AMOUNT');
+
+        IERC20(token0).transferFrom(msg.sender, address(this), amount);
+        IERC20(token0).approve(router, amount);
         
         address[] memory paths = new address[](2);
 
@@ -35,17 +30,53 @@ contract SplitSwap {
 
         while (amount > 0) {
 
-            uint amountIn = amount < size ? amount : size;
-            uint amountOut = 0;
+            uint256 amountIn = amount < size ? amount : size;
 
-            IUniswapV2Router02(router).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            IUniswapV2Router02(router).swapExactTokensForTokens(
                 amountIn, 
-                amountOut, 
+                0, 
                 paths, 
                 msg.sender,
                 block.timestamp + 120);
 
-            amount = amount - amountIn;
+            amount -= amountIn;
+        }  
+    }
+
+    // swap token0 to token1 by router,
+    // the token0 has transfer fee,
+    // the amount of each swap is equal to the size,
+    // the amount of the last swap may be less than the size
+    function splitSwapSupportingTransferFee(address token0, address token1, address router, uint256 amount, uint256 size) public {
+
+        require(amount > 0, 'SplitSwap: AMOUNT_IS_ZERO');
+        require(size > 0, 'SplitSwap: SIZE_IS_ZERO');
+
+        IERC20(token0).transferFrom(msg.sender, address(this), amount);
+
+        amount = IERC20(token0).balanceOf(address(this));
+
+        require(size <= amount, 'SplitSwap: SIZE_IS_MORE_THAN_AMOUNT');
+
+        IERC20(token0).approve(router, amount);
+        
+        address[] memory paths = new address[](2);
+
+        paths[0] = token0;
+        paths[1] = token1;
+
+        while (amount > 0) {
+
+            uint256 amountIn = amount < size ? amount : size;
+
+            IUniswapV2Router02(router).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                amountIn, 
+                0, 
+                paths, 
+                msg.sender,
+                block.timestamp + 120);
+
+            amount -= amountIn;
         }  
     }
 }
