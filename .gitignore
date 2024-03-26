@@ -1,2 +1,5 @@
 # Ignore deps package
 .deps
+
+# Ignore artifacts package
+contracts/artifacts
